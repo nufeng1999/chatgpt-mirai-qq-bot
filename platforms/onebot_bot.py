@@ -1,7 +1,8 @@
+import copy
 import re
 import time
 from base64 import b64decode, b64encode
-from typing import Union, Optional
+from typing import Iterable, List, Union, Optional
 
 import aiohttp
 from aiocqhttp import CQHttp, Event, MessageSegment
@@ -17,8 +18,183 @@ from constants import config, botManager
 from manager.bot import BotManager
 from middlewares.ratelimit import manager as ratelimit_manager
 from universal import handle_message
-
+from threading import Thread
+from aiohttp import web
+import asyncio
+import json
 bot = CQHttp()
+
+
+async def rpcresponse1(event, resp):
+    try:
+        logger.debug(f"rpcresponse send {str(resp)}")
+        # rpcresponse("哎！它又被风控中，暂时无法回复你的内容了。可以和它私聊，这样它可以回复你的内容或问我。")
+        # response.respond(event,True)
+        if not isinstance(resp, MessageChain):
+            resp = MessageChain(resp)
+        resp = transform_from_message_chain(resp)
+        # if config.response.quote and '[CQ:record,file=' not in str(resp):  # skip voice
+        #     resp = MessageSegment.reply(event.message_id) + resp
+        await bot.send(event, resp)
+        logger.debug(f"rpcresponse OK ")
+    except Exception as e:
+        return
+
+async def handle_request(request):
+    # data = await request.json()
+    json_data = await request.json()
+
+    event = json_data[0]
+    resp = json_data[1]
+    # await rpcresponse(obj1,obj2)
+    # print('received:', data)
+
+    try:
+        # event:Event= json.loads(eventjson)
+        # resp:MessageChain = json.loads(respjson)
+        # rpcresponse("哎！它又被风控中，暂时无法回复你的内容了。可以和它私聊，这样它可以回复你的内容或问我。")
+        if not isinstance(resp, MessageChain):
+            resp = MessageChain(resp)
+        resp = transform_from_message_chain(resp)
+        logger.debug(f"rpcresponse send {str(resp)}")
+        # if config.response.quote and '[CQ:record,file=' not in str(resp):  # skip voice
+        #     resp = MessageSegment.reply(event.message_id) + resp
+        await bot.send(event, resp)
+        logger.debug(f"rpcresponse OK ")
+    except Exception as e:
+        pass
+    # result = await data
+    result =time.time()
+    return web.json_response(result)
+
+_rpcsrv_thread = None
+__rpcsrv = None
+
+def start_srvmode():
+    global _rpcsrv_thread
+    _rpcsrv_thread = Thread(target=rpc_srvrun)
+    _rpcsrv_thread.daemon = True
+    _rpcsrv_thread.start()
+
+def rpc_srvrun():
+    asyncio.run(rpc_srv())
+
+async def rpc_srv():
+    global __rpcsrv
+    try:
+        app = web.Application()
+        app.add_routes([web.post('/', handle_request)])
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, f"{config.onebot.forward_listening_host}", config.onebot.forward_listening_port)
+        await site.start()
+        print('Remote Server started...')
+
+        await asyncio.Future()
+    except Exception as e:
+        pass
+    return
+
+def stop_srvmode():
+    if __rpcsrv != None:
+        try:
+            pass
+        except Exception as e:
+            pass
+
+start_srvmode()
+
+async def remotecall(event, resp):
+    async with aiohttp.ClientSession() as session:
+        # eventjson = json.dumps(event) 
+        # respjson = json.dumps(resp) 
+        async with session.post(f"{config.onebot.remote_forward_address}", json=(event, resp)) as cresp:
+            pass
+            #print(await cresp.json())
+
+def rpcresponse(event, is_group: bool = True):
+    async def rpcrespond(resp):
+        try:
+            resp1=resp
+            if isinstance(resp, str):
+                pattern = r"\[CQ:reply,([^\]]+)\]"
+                resp1=re.sub(pattern, "", str(resp))
+                logger.debug(f"---------->>>>>替换后的 {resp1}")
+            # if isinstance(resp, MessageChain):
+            #     msg_dict = resp.to_dict() 
+            #     resp1=json.dumps(msg_dict) 
+            logger.debug(f"[OneBot] 尝试RPC发送消息：{resp1}")
+            asyncio.ensure_future(remotecall(event, str(resp1)))
+        except Exception as e:
+            pass
+    return rpcrespond
+
+class ContainKeyword:
+    def __init__(self, prefix: Union[str, Iterable[str]]) -> None:
+        """初始化前缀检测器.
+
+        Args:
+            prefix (Union[str, Iterable[str]]): 要匹配的前缀
+        """
+        self.prefix: List[str] = [prefix] if isinstance(
+            prefix, str) else list(prefix)
+
+    async def __call__(self, chain: MessageChain, event: Event) -> Optional[MessageChain]:
+        first = chain[0]
+        if isinstance(first, At) and first.target == event.self_id:
+            return MessageChain(chain.__root__[1:], inline=True).removeprefix(" ")
+        elif isinstance(first, Plain):
+            member_info = await bot.get_group_member_info(group_id=event.group_id, user_id=event.self_id)
+            logger.debug(
+                "ContainMe:{}-----{}（Plain）".format(event.message, member_info.get("nickname")))
+            if member_info.get("nickname") and (self.contain(event, str(member_info.get("user_id"))) or
+                                                self.contain(event, (member_info.get("nickname"))) or
+                                                self.contain(event, member_info.get("card"))):
+                return chain.removeprefix(" ")
+        for prefix in self.prefix:
+            # if chain.startswith(prefix):
+            if self.contain(event, (prefix)):
+                return chain.removeprefix(prefix,removeallprefix=True).removeprefix(" ")
+
+        raise ExecutionStop
+
+    def contain(self, event: Event, string: str) -> bool:
+        # logger.debug("contain--->{}".format(string))
+        if (not string.strip()):
+            return False
+        if (event.message.find(string) != -1):
+            return True
+        return False
+
+
+class ContainMe:
+    """包含我的 At 账号或者提到账号群昵称"""
+
+    def __init__(self, name: Union[bool, str] = True) -> None:
+        self.name = name
+
+    async def __call__(self, chain: MessageChain, event: Event) -> Optional[MessageChain]:
+        first = chain[0]
+        if isinstance(first, At) and first.target == event.self_id:
+            return MessageChain(chain.__root__[1:], inline=True).removeprefix(" ")
+        elif isinstance(first, Plain):
+            member_info = await bot.get_group_member_info(group_id=event.group_id, user_id=event.self_id)
+            logger.debug(
+                "ContainMe:{}-----{}（Plain）".format(event.message, member_info.get("nickname")))
+            if member_info.get("nickname") and (self.contain(event, str(member_info.get("user_id"))) or
+                                                self.contain(event, (member_info.get("nickname"))) or
+                                                self.contain(event, member_info.get("card"))):
+                return chain.removeprefix(" ")
+        raise ExecutionStop
+
+    def contain(self, event: Event, string: str) -> bool:
+        # logger.debug("contain--->{}".format(string))
+        if (not string.strip()):
+            return False
+        if (event.message.find(string) != -1):
+            return True
+        return False
 
 
 class MentionMe:
@@ -110,28 +286,36 @@ def transform_from_message_chain(chain: MessageChain):
 def response(event, is_group: bool):
     async def respond(resp):
         logger.debug(f"[OneBot] 尝试发送消息：{str(resp)}")
+        respbak = copy.deepcopy(resp)
         try:
             if not isinstance(resp, MessageChain):
                 resp = MessageChain(resp)
             resp = transform_from_message_chain(resp)
-            if config.response.quote and '[CQ:record,file=' not in str(resp):  # skip voice
+            # skip voice
+            if config.response.quote and '[CQ:record,file=' not in str(resp):
                 resp = MessageSegment.reply(event.message_id) + resp
             return await bot.send(event, resp)
         except Exception as e:
             logger.exception(e)
-            logger.warning("原始消息发送失败，尝试通过转发发送")
-            return await bot.call_action(
-                "send_group_forward_msg" if is_group else "send_private_forward_msg",
-                group_id=event.group_id,
-                messages=[
-                    MessageSegment.node_custom(event.self_id, "ChatGPT", resp)
-                ]
-            )
+            
+            _rpcrespond=rpcresponse(event)
+            await _rpcrespond(respbak)
+            #raise e
+
+            # logger.warning("原始消息发送失败，尝试通过转发发送")
+            # return await bot.call_action(
+            #     "send_group_forward_msg" if is_group else "send_private_forward_msg",
+            #     group_id=event.group_id,
+            #     messages=[
+            #         MessageSegment.node_custom(event.self_id, "ChatGPT", resp)
+            #     ]
+            # )
 
     return respond
 
 
-FriendTrigger = DetectPrefix(config.trigger.prefix + config.trigger.prefix_friend)
+FriendTrigger = DetectPrefix(
+    config.trigger.prefix + config.trigger.prefix_friend)
 
 
 @bot.on_message('private')
@@ -150,6 +334,7 @@ async def _(event: Event):
     try:
         await handle_message(
             response(event, False),
+            rpcresponse(event),
             f"friend-{event.user_id}",
             msg.display,
             chain,
@@ -162,13 +347,19 @@ async def _(event: Event):
 
 
 GroupTrigger = [MentionMe(config.trigger.require_mention != "at"), DetectPrefix(
-    config.trigger.prefix + config.trigger.prefix_group)] if config.trigger.require_mention != "none" else [
-    DetectPrefix(config.trigger.prefix)]
+    config.trigger.prefix + config.trigger.prefix_group)]
+if config.trigger.require_mention == "none":
+    GroupTrigger = GroupTrigger = [DetectPrefix(config.trigger.prefix)]
+elif config.trigger.require_mention == "mention":
+    GroupTrigger = GroupTrigger = [ContainKeyword(config.trigger.prefix_group)]
 
 
 @bot.on_message('group')
 async def _(event: Event):
     if event.message.startswith('.'):
+        return
+    if len(event.message)==0:
+        # logger.debug(f"event.message is null：{event.message}")
         return
     chain = transform_message_chain(event.message)
     try:
@@ -182,11 +373,12 @@ async def _(event: Event):
 
     await handle_message(
         response(event, True),
+        rpcresponse(event),
         f"group-{event.group_id}",
         chain.display,
         is_manager=event.user_id == config.onebot.manager_qq,
         nickname=event.sender.get("nickname", "群友"),
-        request_from=constants.BotPlatform.Onebot
+        request_from=constants.BotPlatform.Onebot,
     )
 
 
@@ -260,7 +452,8 @@ async def _(event: Event):
     if limit is None:
         return await bot.send(event, f"{msg_type} {msg_id} 没有额度限制。")
     usage = ratelimit_manager.get_usage(msg_type, msg_id)
-    current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+    current_time = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
     return await bot.send(event,
                           f"{msg_type} {msg_id} 的额度使用情况：{limit['rate']}条/小时， 当前已发送：{usage['count']}条消息\n整点重置，当前服务器时间：{current_time}")
 
@@ -282,7 +475,8 @@ async def _(event: Event):
     if limit is None:
         return await bot.send(event, f"{msg_type} {msg_id} 没有额度限制。")
     usage = ratelimit_manager.get_draw_usage(msg_type, msg_id)
-    current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+    current_time = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
     return await bot.send(event,
                           f"{msg_type} {msg_id} 的额度使用情况：{limit['rate']}个图/小时， 当前已绘制：{usage['count']}个图\n整点重置，当前服务器时间：{current_time}")
 

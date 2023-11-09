@@ -16,12 +16,18 @@ class MiddlewareTimeout(Middleware):
     def __init__(self):
         ...
 
-    async def handle_request(self, session_id: str, prompt: str, respond: Callable,
-                             conversation_context: Optional[ConversationContext], action: Callable):
+    async def handle_request(self, 
+                             session_id: str, 
+                             prompt: str, 
+                             respond: Callable,
+                             conversation_context: Optional[ConversationContext], 
+                             action: Callable):
         if session_id in self.timeout_task:
             self.timeout_task[session_id].cancel()
-        self.timeout_task[session_id] = asyncio.create_task(self.create_timeout_task(respond, session_id))
-        coro_task = asyncio.create_task(action(session_id, prompt, conversation_context, respond))
+        self.timeout_task[session_id] = asyncio.create_task(
+            self.create_timeout_task(respond, session_id))
+        coro_task = asyncio.create_task(
+            action(session_id, prompt, conversation_context, respond))
         self.request_task[session_id] = coro_task
         try:
             await asyncio.wait_for(coro_task, config.response.max_timeout)
@@ -33,7 +39,6 @@ class MiddlewareTimeout(Middleware):
         except asyncio.TimeoutError:
             await respond(config.response.cancel_wait_too_long)
         except Exception as e:
-            logger.error(f"发生错误: {e}")
             if session_id in self.timeout_task:
                 self.timeout_task[session_id].cancel()
                 del self.timeout_task[session_id]
@@ -58,10 +63,13 @@ class MiddlewareTimeout(Middleware):
             self.timeout_task[session_id] = asyncio.create_task(self.create_timeout_task(respond, session_id))
 
     async def create_timeout_task(self, respond, session_id):
-        logger.debug("[Timeout] 开始计时……")
-        await asyncio.sleep(config.response.timeout)
-        respond_msg = await respond(config.response.timeout_format)
-        logger.debug("[Timeout] 等待过久，发送提示")
-        await asyncio.sleep(90)
-        if ctx := self.ctx[session_id]:
-            await ctx.delete_message(respond_msg)
+        try:
+            logger.debug("[Timeout] 开始计时……")
+            await asyncio.sleep(config.response.timeout)
+            respond_msg = await respond(config.response.timeout_format)
+            logger.debug("[Timeout] 等待过久，发送提示")
+            await asyncio.sleep(90)
+            if ctx := self.ctx[session_id]:
+                await ctx.delete_message(respond_msg)
+        except Exception as e:
+            logger.error(f"create_timeout_task发生错误: {e}")

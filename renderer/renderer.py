@@ -8,7 +8,7 @@ from typing import Optional
 
 from graia.ariadne.message.chain import MessageChain
 from graia.ariadne.message.element import Plain
-
+from loguru import logger
 
 class PlainTextRenderer(Renderer):
     def __init__(self, parent: Renderer):
@@ -28,7 +28,10 @@ class PlainTextRenderer(Renderer):
         for rendered in groups:
             if not str(rendered).strip():
                 continue
+            if (everything==str(rendered)):
+                continue
             everything = everything + str(rendered)
+            logger.debug(f"parse,{everything}")
         return MessageChain([Plain(everything)]) if everything else None
 
     async def render(self, msg: str) -> Optional[MessageChain]:

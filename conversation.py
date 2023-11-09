@@ -18,7 +18,10 @@ from adapter.chatgpt.web import ChatGPTWebAdapter
 from adapter.claude.slack import ClaudeInSlackAdapter
 from adapter.google.bard import BardAdapter
 from adapter.ms.bing import BingAdapter
+from adapter.aliyun.tongyi import TongyiAdapter
 from adapter.xunfei.xinghuo import XinghuoAdapter
+from adapter.xunfei.xinghuo2_0 import Xinghuo2_0_Adapter
+from adapter.xunfei.xinghuo1_5 import Xinghuo1_5_Adapter
 from drawing import DrawingAPI, SDWebUI as SDDrawing, OpenAI as OpenAIDrawing
 from adapter.quora.poe import PoeBot, PoeAdapter
 from adapter.thudm.chatglm_6b import ChatGLM6BAdapter
@@ -108,8 +111,14 @@ class ConversationContext:
             self.adapter = ChatGLM6BAdapter(self.session_id)
         elif _type == LlmName.SlackClaude.value:
             self.adapter = ClaudeInSlackAdapter(self.session_id)
+        elif _type == LlmName.TongyiQianwen.value:
+            self.adapter = TongyiAdapter(self.session_id)
         elif _type == LlmName.XunfeiXinghuo.value:
             self.adapter = XinghuoAdapter(self.session_id)
+        elif _type == LlmName.XunfeiXinghuo1_5.value:
+            self.adapter = Xinghuo1_5_Adapter(self.session_id)
+        elif _type == LlmName.XunfeiXinghuo2_0.value:
+            self.adapter = Xinghuo2_0_Adapter(self.session_id)
         else:
             raise BotTypeNotFoundException(_type)
         self.type = _type

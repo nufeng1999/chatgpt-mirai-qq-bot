@@ -8,3 +8,11 @@ data/*.json
 Dockerfile.dev
 **/.DS_Store
 venv/
+qq.py
+bot1.py
+
+go-cqhttp.pid
+restart.sh
+update.patch
+device.json
+staged-changes.patch

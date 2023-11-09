@@ -30,7 +30,10 @@ class LlmName(Enum):
     Bard = "bard"
     YiYan = "yiyan"
     ChatGLM = "chatglm-api"
+    TongyiQianwen = "tongyi"
     XunfeiXinghuo = "xinghuo"
+    XunfeiXinghuo1_5 = "xinghuo1_5"
+    XunfeiXinghuo2_0 = "xinghuo2_0"
 
 
 class BotPlatform(Enum):
