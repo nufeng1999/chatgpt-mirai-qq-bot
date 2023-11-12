@@ -18,7 +18,6 @@ from datetime import datetime
 config = Config.load_config()
 current_file_path = os.path.abspath(sys.argv[0])
 
-
 class ChatCache:
     """ """
 
