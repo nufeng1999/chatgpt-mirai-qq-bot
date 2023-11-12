@@ -31,7 +31,7 @@ class PlainTextRenderer(Renderer):
             if (everything==str(rendered)):
                 continue
             everything = everything + str(rendered)
-            logger.debug(f"parse,{everything}")
+            # logger.debug(f"parse,{everything}")
         return MessageChain([Plain(everything)]) if everything else None
 
     async def render(self, msg: str) -> Optional[MessageChain]:

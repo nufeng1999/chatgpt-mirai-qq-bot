@@ -22,8 +22,11 @@ from threading import Thread
 from aiohttp import web
 import asyncio
 import json
-bot = CQHttp()
+from datetime import datetime
+from .onebot_assets.ChatCache import ChatCache
 
+bot = CQHttp()
+# chatcache.run_reply()
 
 async def rpcresponse1(event, resp):
     try:
@@ -294,6 +297,22 @@ def response(event, is_group: bool):
             # skip voice
             if config.response.quote and '[CQ:record,file=' not in str(resp):
                 resp = MessageSegment.reply(event.message_id) + resp
+            try:
+                if is_group \
+                and str(resp).find('[语音]')<0 \
+                and  '[CQ:record,file=' not in str(resp):
+                    curtime = datetime.now()
+                    chatcache.insert_chatcontent(
+                        event.group_id,
+                        str(config.onebot.qq),
+                        f"bot-{str(config.onebot.qq)}",
+                        # event.sender.get("nickname", "群友"),
+                        curtime.strftime("%Y-%m-%d %H:%M:%S"),
+                        str(event.message_id),
+                        str(resp)
+                    )
+            except Exception  as e:
+                logger.exception(e)
             return await bot.send(event, resp)
         except Exception as e:
             logger.exception(e)
@@ -363,9 +382,20 @@ async def _(event: Event):
         return
     chain = transform_message_chain(event.message)
     try:
+        if str(event.message).find('[语音]')<0:
+            curtime = datetime.now()
+            chatcache.insert_chatcontent(
+                event.group_id,
+                event.user_id,
+                event.sender.get("nickname", "群友"),
+                curtime.strftime("%Y-%m-%d %H:%M:%S"),
+                str(event.message_id),
+                event.message
+            )
         for it in GroupTrigger:
             chain = await it(chain, event)
-    except:
+    except Exception as e:
+        # logger.exception(e)
         logger.debug(f"丢弃群聊消息：{event.message}（原因：不符合触发前缀）")
         return
 
@@ -548,3 +578,5 @@ async def start_task():
     以异步方式启动
     """
     return await bot.run_task(host=config.onebot.reverse_ws_host, port=config.onebot.reverse_ws_port)
+
+chatcache=ChatCache(bot,transform_from_message_chain)

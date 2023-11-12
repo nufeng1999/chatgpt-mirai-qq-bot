@@ -16,3 +16,7 @@ restart.sh
 update.patch
 device.json
 staged-changes.patch
+presets/yl.txt
+.gitignore
+test/
+database.db

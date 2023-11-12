@@ -18,7 +18,7 @@ class Onebot(BaseModel):
     forward_listening_host: str = "0.0.0.0"
     forward_listening_port : Optional[int] = 4241
     remote_forward_address ="http://127.0.0.1:4242"
-
+    qq: int
 class Mirai(BaseModel):
     qq: int
     """Bot 的 QQ 号"""
