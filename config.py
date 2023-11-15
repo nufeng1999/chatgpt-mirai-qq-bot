@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List, Union, Literal, Dict, Optional
-from pydantic import BaseModel, BaseConfig, Extra
+from pydantic import BaseConfig, BaseModel, Extra
 from charset_normalizer import from_bytes
 from loguru import logger
 import os
@@ -265,6 +265,12 @@ class Xinghuo1_5_CookiePath(BaseModel):
     APIKey: str
     proxy: Optional[str] = None
     """可选的代理地址，留空则检测系统代理"""
+class Xinghuo3_x_CookiePath(BaseModel):
+    APPID: str
+    APISecret: str
+    APIKey: str
+    proxy: Optional[str] = None
+    """可选的代理地址，留空则检测系统代理"""
 class YiyanAuths(BaseModel):
     accounts: List[YiyanCookiePath] = []
     """文心一言的账号列表"""
@@ -280,6 +286,9 @@ class Xinghuo2_0_Auths(BaseModel):
     """讯飞星火大模型的账号列表"""
 class Xinghuo1_5_Auths(BaseModel):
     accounts: List[Xinghuo1_5_CookiePath] = []
+    """讯飞星火大模型的账号列表"""
+class Xinghuo3_x_Auths(BaseModel):
+    accounts: List[Xinghuo3_x_CookiePath] = []
     """讯飞星火大模型的账号列表"""
 
 
@@ -585,6 +594,7 @@ class Config(BaseModel):
     xinghuo: XinghuoAuths = XinghuoAuths()
     xinghuo1_5: Xinghuo1_5_Auths = Xinghuo1_5_Auths()
     xinghuo2_0: Xinghuo2_0_Auths = Xinghuo2_0_Auths()
+    xinghuo3_x: Xinghuo3_x_Auths = Xinghuo3_x_Auths()
     # === Response Settings ===
     text_to_image: TextToImage = TextToImage()
     text_to_speech: TextToSpeech = TextToSpeech()

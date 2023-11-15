@@ -23,10 +23,10 @@ from aiohttp import web
 import asyncio
 import json
 from datetime import datetime
-from .onebot_assets.ChatCache import ChatCache
+from .onebot_assets.smart_response import Smart_Response
 
 bot = CQHttp()
-# chatcache.run_reply()
+# smartresponse.run_reply()
 
 async def rpcresponse1(event, resp):
     try:
@@ -301,16 +301,17 @@ def response(event, is_group: bool):
                 if is_group \
                 and str(resp).find('[语音]')<0 \
                 and  '[CQ:record,file=' not in str(resp):
-                    curtime = datetime.now()
-                    chatcache.insert_chatcontent(
-                        event.group_id,
-                        str(config.onebot.qq),
-                        f"bot-{str(config.onebot.qq)}",
-                        # event.sender.get("nickname", "群友"),
-                        curtime.strftime("%Y-%m-%d %H:%M:%S"),
-                        str(event.message_id),
-                        str(resp)
-                    )
+                    # curtime = datetime.now()
+                    # smartresponse.insert_chatcontent(
+                    #     event.group_id,
+                    #     str(config.onebot.qq),
+                    #     f"bot-{str(config.onebot.qq)}",
+                    #     # event.sender.get("nickname", "群友"),
+                    #     curtime.strftime("%Y-%m-%d %H:%M:%S"),
+                    #     str(event.message_id),
+                    #     str(resp)
+                    # )
+                    smartresponse.delete_all_chatcontent(event.group_id)
             except Exception  as e:
                 logger.exception(e)
             return await bot.send(event, resp)
@@ -384,7 +385,7 @@ async def _(event: Event):
     try:
         if str(event.message).find('[语音]')<0:
             curtime = datetime.now()
-            chatcache.insert_chatcontent(
+            smartresponse.insert_chatcontent(
                 event.group_id,
                 event.user_id,
                 event.sender.get("nickname", "群友"),
@@ -579,4 +580,5 @@ async def start_task():
     """
     return await bot.run_task(host=config.onebot.reverse_ws_host, port=config.onebot.reverse_ws_port)
 
-chatcache=ChatCache(bot,transform_from_message_chain)
+smartresponse=Smart_Response(bot,transform_from_message_chain)
+smartresponse.run_reply()

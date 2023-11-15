@@ -4,6 +4,7 @@ import json
 from typing import Generator
 import re
 from adapter.botservice import BotAdapter
+from adapter.educational_reminder import Educational_Reminder
 from config import TongyiCookiePath
 from constants import botManager
 from exceptions import BotOperationNotSupportedException
@@ -13,6 +14,7 @@ import base64
 from PIL import Image
 import random
 
+er=Educational_Reminder()
 class TongyiAdapter(BotAdapter):
     """
     Credit: 
@@ -146,6 +148,12 @@ class TongyiAdapter(BotAdapter):
         if self.sessionId:
             logger.debug(f"sessionId={self.sessionId}")
             # self.JSESSIONID=jsessionid_value
+            #加入初始化预设内容，进行教育指导
+            async for text in er.get_prompt():
+                async for item in self.ask(text): ...
+                if item:
+                    logger.debug(f"[机器人会话初始化] Chatbot 回应：{item}")
+            #
     async def ask(self, prompt) -> Generator[str, None, None]:
         if not self.sessionId:
             logger.debug(f"创建新的 sessionId")

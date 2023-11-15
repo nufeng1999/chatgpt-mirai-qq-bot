@@ -27,7 +27,9 @@ from tinydb import TinyDB, Query
 import utils.network as network
 from chatbot.chatgpt import ChatGPTBrowserChatbot
 from config import OpenAIAuthBase, OpenAIAPIKey, Config, BingCookiePath, BardCookiePath, YiyanCookiePath, ChatGLMAPI, \
-    PoeCookieAuth, SlackAppAccessToken, XinghuoCookiePath,TongyiCookiePath,Xinghuo1_5_CookiePath,Xinghuo2_0_CookiePath
+    PoeCookieAuth, SlackAppAccessToken, \
+        XinghuoCookiePath,TongyiCookiePath,\
+        Xinghuo1_5_CookiePath,Xinghuo2_0_CookiePath,Xinghuo3_x_CookiePath
 from exceptions import NoAvailableBotException, APIKeyNoFundsError
 
 
@@ -45,6 +47,7 @@ class BotManager:
         "xinghuo-cookie": [],
         "xinghuo1-5-cookie": [],
         "xinghuo2-0-cookie": [],
+        "xinghuo3-x-cookie": [],
         "slack-accesstoken": [],
     }
     """Bot list"""
@@ -73,6 +76,7 @@ class BotManager:
     xinghuo: List[XinghuoCookiePath]
     xinghuo1_5: List[Xinghuo1_5_CookiePath]
     xinghuo2_0: List[Xinghuo2_0_CookiePath]
+    xinghuo3_x: List[Xinghuo3_x_CookiePath]
     """Xinghuo Account Infos"""
 
     roundrobin: Dict[str, itertools.cycle] = {}
@@ -90,6 +94,7 @@ class BotManager:
         self.xinghuo = config.xinghuo.accounts if config.xinghuo else []
         self.xinghuo1_5 = config.xinghuo1_5.accounts if config.xinghuo1_5 else []
         self.xinghuo2_0 = config.xinghuo2_0.accounts if config.xinghuo2_0 else []
+        self.xinghuo3_x = config.xinghuo3_x.accounts if config.xinghuo3_x else []
         try:
             os.mkdir('data')
             logger.warning(
@@ -150,6 +155,7 @@ class BotManager:
             "xinghuo-cookie": [],
             "xinghuo1-5-cookie": [],
             "xinghuo2-0-cookie": [],
+            "xinghuo3-x-cookie": [],
             "chatglm-api": [],
             "slack-accesstoken": [],
         }
@@ -165,6 +171,7 @@ class BotManager:
             'xinghuo': self.login_xinghuo,
             'xinghuo1_5': self.login_xinghuo1_5,
             'xinghuo2_0': self.login_xinghuo2_0,
+            'xinghuo3_x': self.login_xinghuo3_x,
             'openai': self.handle_openai,
             'yiyan': self.login_yiyan,
             'chatglm': self.login_chatglm
@@ -201,6 +208,7 @@ class BotManager:
                 "xinghuo-cookie": "xinghuo",
                 "xinghuo1-5-cookie": "xinghuo1_5",
                 "xinghuo2-0-cookie": "xinghuo2_0",
+                "xinghuo3-x-cookie": "xinghuo3_x",
             }
 
             self.config.response.default_ai = next(
@@ -336,6 +344,21 @@ class BotManager:
         if len(self.bots["xinghuo2-0-cookie"]) < 1:
             logger.error("所有 讯飞星火2.x 账号均解析失败！")
         logger.success(f"成功解析 {len(self.bots['xinghuo2-0-cookie'])}/{len(self.xinghuo2_0)} 个 讯飞星火 账号！")
+    def login_xinghuo3_x(self):
+        try:
+            for i, account in enumerate(self.xinghuo3_x):
+                logger.info("正在解析第 {i} 个 讯飞星火3.x 账号", i=i + 1)
+                if proxy := self.__check_proxy(account.proxy):
+                    account.proxy = proxy
+                self.bots["xinghuo3-x-cookie"].append(account)
+                logger.success("解析成功！", i=i + 1)
+        except Exception as e:
+            logger.error("解析失败：")
+            logger.exception(e)
+        if len(self.bots["xinghuo3-x-cookie"]) < 1:
+            logger.error("所有 讯飞星火3.x 账号均解析失败！")
+        logger.success(f"成功解析 {len(self.bots['xinghuo3-x-cookie'])}/{len(self.xinghuo3_x)} 个 讯飞星火 账号！")
+
 
     def login_poe(self):
         from adapter.quora.poe import PoeClientWrapper
@@ -635,7 +658,9 @@ class BotManager:
         if len(self.bots['xinghuo-cookie']) > 0:
             bot_info += f"* {LlmName.XunfeiXinghuo.value} : 星火大模型Web\n"
         if len(self.bots['xinghuo1-5-cookie']) > 0:
-            bot_info += f"* {LlmName.XunfeiXinghuo1_5.value} : 星火大模型1.5\n"
+            bot_info += f"* {LlmName.XunfeiXinghuo1_5.value} : 星火大模型1.x\n"
         if len(self.bots['xinghuo2-0-cookie']) > 0:
-            bot_info += f"* {LlmName.XunfeiXinghuo2_0.value} : 星火大模型2.0\n"
+            bot_info += f"* {LlmName.XunfeiXinghuo2_0.value} : 星火大模型2.x\n"
+        if len(self.bots['xinghuo3-x-cookie']) > 0:
+            bot_info += f"* {LlmName.XunfeiXinghuo3_x.value} : 星火大模型3.x\n"
         return bot_info

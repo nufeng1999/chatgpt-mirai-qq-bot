@@ -1,8 +1,10 @@
 from io import BytesIO
+import json
 
 from typing import Generator
 import re
 from adapter.botservice import BotAdapter
+from adapter.educational_reminder import Educational_Reminder
 from config import XinghuoCookiePath
 from constants import botManager
 from exceptions import BotOperationNotSupportedException
@@ -11,7 +13,9 @@ import httpx
 import base64
 from PIL import Image
 import random
+from graia.ariadne.message.element import Image as GraiaImage
 
+er=Educational_Reminder()
 class XinghuoAdapter(BotAdapter):
     """
     Credit: https://github.com/dfvips/xunfeixinghuo
@@ -93,6 +97,13 @@ class XinghuoAdapter(BotAdapter):
         if jsessionid_value:
             logger.debug(f"JSESSIONID={jsessionid_value}")
             self.JSESSIONID=jsessionid_value
+            #加入初始化预设内容，进行教育指导
+            # async for text in er.get_prompt():
+            #     async for item in self.ask(text): ...
+            #     if item:
+            #         logger.debug(f"[机器人会话初始化] Chatbot 回应：{item}")
+            #
+
     async def ask(self, prompt) -> Generator[str, None, None]:
         if not self.conversation_id:
             # logger.debug(f"创建新的 conversation_id")
@@ -130,7 +141,8 @@ class XinghuoAdapter(BotAdapter):
                     break
 
                 if line == 'data:[geeError]':
-                    yield "出现错误了，请重新发送一次消息再试。"
+                    logger.debug(f"[Xinghuo] {line}")
+                    # yield "出现错误了，请重新发送一次消息再试。"
                     break
                 encoded_data = line[len("data:"):]
                 if(contentendflag==1):
@@ -140,11 +152,14 @@ class XinghuoAdapter(BotAdapter):
                     self.parent_chat_id =sid
                     break
                 if encoded_data == '[error]':
-                    yield "出现错误了，请重新发送一次消息再试。"
+                    logger.debug(f"[Xinghuo] {encoded_data}")
+                    # yield "出现错误了，请重新发送一次消息再试。"
                     break
                 pattern = r'^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$'
                 if not re.match(pattern, encoded_data):
-                    yield "出现错误了，请重新发送一次消息再试。"
+                    logger.debug(f"[Xinghuo] base64编码错误:{line}")
+                    logger.debug(f"[Xinghuo] base64编码错误:{encoded_data}")
+                    # yield "出现错误了，请重新发送一次消息再试。"
                     break
                 missing_padding = len(encoded_data) % 4
                 if missing_padding != 0:
@@ -153,8 +168,20 @@ class XinghuoAdapter(BotAdapter):
                 if encoded_data != 'zw':
                     decoded_data = decoded_data.replace('\n\n', '\n')
                 full_response += decoded_data
-                # logger.debug(f"[Xinghuo] {self.JSESSIONID}-{self.conversation_id}-{full_response}")
-                yield full_response
+                ##处理图片
+                # 使用正则表达式匹配大括号中的内容
+                match = re.search(r'{.*}', full_response)
+
+                if match:
+                    json_str = match.group(0)
+                    logger.debug(f"[Xinghuo] multi_image_url {json_str}")
+                    data = json.loads(json_str)
+                    url_value = data.get('url')
+                    if url_value:
+                        yield GraiaImage(data_bytes=await self.__download_image(url_value))
+                else:
+                    # logger.debug(f"[Xinghuo] {self.JSESSIONID}-{self.conversation_id}-{full_response}")
+                    yield full_response
         jsessionid_value = req.cookies.get("JSESSIONID")
         if jsessionid_value:
             logger.debug(f"JSESSIONID={jsessionid_value}")
@@ -175,3 +202,10 @@ class XinghuoAdapter(BotAdapter):
     def __check_response(self, resp):
         if int(resp['code']) != 0:
             raise Exception(resp['msg'])
+    async def __download_image(self, url: str) -> bytes:
+        image = await self.client.get(url)
+        image.raise_for_status()
+        from_format = BytesIO(image.content)
+        to_format = BytesIO()
+        Image.open(from_format).save(to_format, format='jpg')
+        return to_format.getvalue()

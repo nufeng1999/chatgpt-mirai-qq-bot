@@ -151,3 +151,11 @@ class V1BotClient(V2BotClient):
         super().__init__(appid, api_secret, api_key)
         self.domain = "general"
         self.spark_url = "ws://spark-api.xf-yun.com/v1.1/chat"
+
+class V3BotClient(V2BotClient):
+    """V1版本的接口"""
+
+    def __init__(self, appid: str, api_secret: str, api_key: str) -> None:
+        super().__init__(appid, api_secret, api_key)
+        self.domain = "generalv3"
+        self.spark_url = "ws://spark-api.xf-yun.com/v3.1/chat"

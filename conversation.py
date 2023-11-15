@@ -20,6 +20,7 @@ from adapter.google.bard import BardAdapter
 from adapter.ms.bing import BingAdapter
 from adapter.aliyun.tongyi import TongyiAdapter
 from adapter.xunfei.xinghuo import XinghuoAdapter
+from adapter.xunfei.xinghuo3_x import Xinghuo3_x_Adapter
 from adapter.xunfei.xinghuo2_0 import Xinghuo2_0_Adapter
 from adapter.xunfei.xinghuo1_5 import Xinghuo1_5_Adapter
 from drawing import DrawingAPI, SDWebUI as SDDrawing, OpenAI as OpenAIDrawing
@@ -119,6 +120,8 @@ class ConversationContext:
             self.adapter = Xinghuo1_5_Adapter(self.session_id)
         elif _type == LlmName.XunfeiXinghuo2_0.value:
             self.adapter = Xinghuo2_0_Adapter(self.session_id)
+        elif _type == LlmName.XunfeiXinghuo3_x.value:
+            self.adapter = Xinghuo3_x_Adapter(self.session_id)
         else:
             raise BotTypeNotFoundException(_type)
         self.type = _type
@@ -167,7 +170,9 @@ class ConversationContext:
         await self.check_and_reset()
         # 检查是否为 画图指令
         for prefix in config.trigger.prefix_image:
-            if prompt.startswith(prefix) and not isinstance(self.adapter, YiyanAdapter):
+            if prompt.startswith(prefix) \
+                and not isinstance(self.adapter, YiyanAdapter)\
+                and not isinstance(self.adapter, XinghuoAdapter):
                 # TODO(lss233): 此部分可合并至 RateLimitMiddleware
                 respond_str = middlewares.handle_draw_request(self.session_id, prompt)
                 # TODO(lss233): 这什么玩意

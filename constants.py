@@ -34,6 +34,7 @@ class LlmName(Enum):
     XunfeiXinghuo = "xinghuo"
     XunfeiXinghuo1_5 = "xinghuo1_5"
     XunfeiXinghuo2_0 = "xinghuo2_0"
+    XunfeiXinghuo3_x = "xinghuo3_x"
 
 
 class BotPlatform(Enum):
