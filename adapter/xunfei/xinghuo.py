@@ -113,6 +113,7 @@ class XinghuoAdapter(BotAdapter):
         encoded_data = ''
         self.__setup_headers(self.client)
         self.account.fd=self._getfd()
+        self.client.timeout = 120 # 设置为20秒
         async with self.client.stream(
                     "POST",
                     url="https://xinghuo.xfyun.cn/iflygpt-chat/u/chat_message/chat",

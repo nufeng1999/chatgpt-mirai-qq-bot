@@ -221,6 +221,7 @@ class Smart_Response():
     def get_aiJprompt3(self, nickname: str, content: str):
         Judgereplyprompt = f"""
 请根据下面的对话内容，对话内容中的"{str(config.onebot.qq)}"表示你自己。
+如果对话内容里有"欢迎。新人",你就主动对新人回复一句文馨的问候语，并告诉新人你叫"YL"。
 如果对话内容里没人回答其中的问题,特别是带问号结尾的问题，你就主动对问题进行回复。
 判断是否需要加入对话内容的讨论。
 如果需要，就回复你对讨论内容的详细看法，越详细越好。
@@ -382,6 +383,9 @@ def auto_reply(bot: CQHttp, transform_from_message_chain: Callable):
             value = re.sub(pattern, "", value)
             pattern = rf"{str(config.onebot.qq)}"
             value = re.sub(pattern, "", value)
+            pattern = rf"YL:"
+            value = re.sub(pattern, "", value)
+            
 
             keyword = "根据对话内容"
             new_line = ""
@@ -415,12 +419,14 @@ def auto_reply(bot: CQHttp, transform_from_message_chain: Callable):
                 f"bot-{str(config.onebot.qq)}", chatcontent
             )
             await reply1(chatche, groupid, aiJprompt3)
-
+        await asyncio.sleep(7)
     try:
+        # event = asyncio.Event()
         while True:
             try:
                 loop.run_until_complete(thread_async_function())
-                time.sleep(15)
+                
+                # time.sleep(15)
             except Exception as e:
                 pass
     finally:
