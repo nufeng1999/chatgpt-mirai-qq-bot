@@ -206,8 +206,11 @@ class ConversationContext:
             )
 
         async with self.renderer:
+            # logger.debug(f"ask prompt {str(prompt)}")
             async for item in self.adapter.ask(prompt):
+                # logger.debug(f"ask result {str(item)}")
                 if isinstance(item, Element):
+                    # logger.debug(f"ask result {str(item)}")
                     yield item
                 else:
                     yield await self.renderer.render(item)

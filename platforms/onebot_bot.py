@@ -24,7 +24,9 @@ import asyncio
 import json
 from datetime import datetime
 from .onebot_assets.smart_response import Smart_Response
+from .onebot_assets.dbmng import DB_Manager
 
+db_manager=DB_Manager()
 bot = CQHttp()
 # smartresponse.run_reply()
 
@@ -302,7 +304,7 @@ def response(event, is_group: bool):
                 and str(resp).find('[语音]')<0 \
                 and  '[CQ:record,file=' not in str(resp):
                     # curtime = datetime.now()
-                    # smartresponse.insert_chatcontent(
+                    # db_manager.insert_chatcontent(
                     #     event.group_id,
                     #     str(config.onebot.qq),
                     #     f"bot-{str(config.onebot.qq)}",
@@ -311,7 +313,7 @@ def response(event, is_group: bool):
                     #     str(event.message_id),
                     #     str(resp)
                     # )
-                    smartresponse.delete_all_chatcontent(event.group_id)
+                    db_manager.delete_all_chatcontent(event.group_id)
             except Exception  as e:
                 logger.exception(e)
             return await bot.send(event, resp)
@@ -385,7 +387,7 @@ async def _(event: Event):
     try:
         if str(event.message).find('[语音]')<0:
             curtime = datetime.now()
-            smartresponse.insert_chatcontent(
+            db_manager.insert_chatcontent(
                 event.group_id,
                 event.user_id,
                 event.sender.get("nickname", "群友"),

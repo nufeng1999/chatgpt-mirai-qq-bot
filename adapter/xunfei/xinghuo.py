@@ -1,8 +1,9 @@
+from datetime import datetime
 from io import BytesIO
 import json
 
-from typing import Generator
 import re
+from typing import Generator
 from adapter.botservice import BotAdapter
 from adapter.educational_reminder import Educational_Reminder
 from config import XinghuoCookiePath
@@ -14,6 +15,7 @@ import base64
 from PIL import Image
 import random
 from graia.ariadne.message.element import Image as GraiaImage
+from platforms.onebot_assets.dbmng import DB_Manager
 
 er=Educational_Reminder()
 class XinghuoAdapter(BotAdapter):
@@ -25,12 +27,15 @@ class XinghuoAdapter(BotAdapter):
 
     def __init__(self, session_id: str = ""):
         super().__init__(session_id)
+        self.db_manager=DB_Manager()
         self.session_id = session_id
         self.account = botManager.pick('xinghuo-cookie')
         self.client = httpx.AsyncClient(proxies=self.account.proxy)
         self.JSESSIONID = ''
+        self.group_id=self._get_groupid()
         self.__setup_headers(self.client)
         self.conversation_id = None
+        # await self.new_conversation()
         self.parent_chat_id = ''
     async def delete_conversation(self, session_id):
         # https://xinghuo.xfyun.cn/iflygpt/u/chat-list/v1/del-chat-list
@@ -97,6 +102,12 @@ class XinghuoAdapter(BotAdapter):
         if jsessionid_value:
             logger.debug(f"JSESSIONID={jsessionid_value}")
             self.JSESSIONID=jsessionid_value
+            curtime = datetime.now()
+            self.db_manager.insert_chatconversation(
+                self.group_id,
+                self.conversation_id,
+                curtime.strftime("%Y-%m-%d %H:%M:%S")
+            )
             #加入初始化预设内容，进行教育指导
             # async for text in er.get_prompt():
             #     async for item in self.ask(text): ...
@@ -105,9 +116,10 @@ class XinghuoAdapter(BotAdapter):
             #
 
     async def ask(self, prompt) -> Generator[str, None, None]:
-        if not self.conversation_id:
+        await self.check_chatid()
+        # if not self.conversation_id:
             # logger.debug(f"创建新的 conversation_id")
-            await self.new_conversation()
+            # await self.new_conversation()
         sid=''
         full_response = ''
         encoded_data = ''
@@ -174,12 +186,15 @@ class XinghuoAdapter(BotAdapter):
                 match = re.search(r'{.*}', full_response)
 
                 if match:
-                    json_str = match.group(0)
-                    logger.debug(f"[Xinghuo] multi_image_url {json_str}")
-                    data = json.loads(json_str)
-                    url_value = data.get('url')
-                    if url_value:
-                        yield GraiaImage(data_bytes=await self.__download_image(url_value))
+                    try:
+                        json_str = match.group(0)
+                        logger.debug(f"[Xinghuo] multi_image_url {json_str}")
+                        data = json.loads(json_str)
+                        url_value = data.get('url')
+                        if url_value:
+                            yield GraiaImage(data_bytes=await self.__download_image(url_value))
+                    except Exception as e:
+                        logger.exception(e)
                 else:
                     # logger.debug(f"[Xinghuo] {self.JSESSIONID}-{self.conversation_id}-{full_response}")
                     yield full_response
@@ -200,6 +215,36 @@ class XinghuoAdapter(BotAdapter):
             if item:
                 logger.debug(f"[预设] Chatbot 回应：{item}")
 
+    def _get_groupid(self):
+        input_string = self.session_id
+        match = re.search(r'\d+', input_string)
+        result=''
+        if match:
+            result = match.group()
+        return result
+    async def check_chatid(self) -> bool:
+        code=-1
+        if not self.conversation_id:
+            self.conversation_id=self.db_manager.get_last_chatconversationid(self.group_id)
+        if self.conversation_id:
+            # 设置请求头、文件描述符和超时时间
+            # self.__setup_headers(self.client)
+            # self.account.fd = self._getfd()
+            # self.client.headers=[]
+            self.client.timeout = 120  # 设置为20秒
+            # 发送请求检查 chatid
+            r = await self.client.get(
+                url=f"https://xinghuo.xfyun.cn/iflygpt/u/chat_history/all/{self.conversation_id}"
+            )
+            r_json = r.json()
+            # logger.debug(f"check_chatid -{str(r_json)}")
+            code = r_json.get('code')
+            logger.debug(f"check_chatid -{self.conversation_id}--{code}")
+        if code==0:
+            return True
+        await self.new_conversation()
+        return True
+
     def __check_response(self, resp):
         if int(resp['code']) != 0:
             raise Exception(resp['msg'])
@@ -208,5 +253,5 @@ class XinghuoAdapter(BotAdapter):
         image.raise_for_status()
         from_format = BytesIO(image.content)
         to_format = BytesIO()
-        Image.open(from_format).save(to_format, format='jpg')
+        Image.open(from_format).save(to_format, format='JPEG')
         return to_format.getvalue()
